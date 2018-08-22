@@ -15,13 +15,14 @@ def pretty_date(timestamp: int):
     return datetime.fromtimestamp(timestamp, tz=pytz.UTC).strftime('%F %T')
 
 def pool_data_gen(period, rates):
-    for slow in range(10, 41):
-        for fast in range(2, 31):
-            for signal in range(2,21):
+    for fast in range(2, 31):
+        for signal in range(2, 21):
+            for slow in range(10, 41):
                 if fast + 2 <= slow:
-                    yield fast, slow, signal, period, dict(rates)
+                    yield fast, slow, signal, period, rates
 
-def pool_processor(fast, slow, signal, period, rates):
+def pool_processor(fast, slow, signal, period, raw_rates):
+    rates = dict(raw_rates)
     db = DbHelper(fast, slow, signal, period)
     max_ts = db.get_max_ts()
     for cts, price in rates.items():
