@@ -1,6 +1,7 @@
 import mysql.connector
 from mysql.connector import ProgrammingError, connect
 
+from config import FileConfig
 from models.Advise import Advise
 
 
@@ -26,12 +27,15 @@ class DbHelper:
 
     def __init__(self, fast: int, slow: int, signal: int, period: int):
         self.db = None
+
+        config = FileConfig()
+
         try:
             self.db = connect(
-                host="localhost",
-                user="root",
-                passwd="",
-                database="advises"
+                host=config.get('DB.host'),
+                user=config.get('DB.user'),
+                passwd=config.get('DB.pass'),
+                database=config.get('DB.name')
             )
         except ProgrammingError as e:
             print(f'[DB] [ERROR] {e.msg}')
