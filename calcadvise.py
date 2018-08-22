@@ -45,7 +45,7 @@ def combine_rate(minute_rates, period_rates):
     return result
 
 if __name__ == '__main__':
-    end = 1514764800#time()
+    end = 1506902400#1514764800#time()
 
     config = FileConfig()
 
