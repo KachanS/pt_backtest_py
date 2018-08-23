@@ -55,7 +55,6 @@ class DbHelper:
         return {x[0]:Advise(*x).setKey(self.__key) for x in cursor.fetchall()}
 
     def fetch_last(self, ts: int) -> Advise:
-        self.create_table(self.__table)
         cursor = self.db.cursor()
         cursor.execute(f'SELECT * FROM {self.__table} WHERE p_slow = %s AND ts < %s AND MOD(ts, {self.period*60}) = 0 ORDER BY ts DESC LIMIT 1', (self.slow, ts))
         data = cursor.fetchone()
@@ -79,6 +78,13 @@ class DbHelper:
     def save(self, advise: Advise):
         cursor = self.db.cursor()
         cursor.execute(f'INSERT INTO {self.__table} VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)', advise.as_tuple() + (self.slow,))
+        self.db.commit()
+
+    def pre_save(self, advise: Advise):
+        cursor = self.db.cursor()
+        cursor.execute(f'INSERT INTO {self.__table} VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)', advise.as_tuple() + (self.slow,))
+
+    def commit(self):
         self.db.commit()
 
 if __name__ == '__main__':
