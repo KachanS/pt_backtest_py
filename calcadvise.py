@@ -25,6 +25,7 @@ def pool_processor(fast, slow, signal, period, raw_rates):
     rates = dict(raw_rates)
     db = DbHelper(fast, slow, signal, period)
     max_ts = db.get_max_ts()
+    to_save_counter = 0
     for cts, price in rates.items():
         cts = int(cts)
         price = float(price)
@@ -34,7 +35,13 @@ def pool_processor(fast, slow, signal, period, raw_rates):
             last = db.fetch_last(cts)
             if last is not None:
                 new = MacD(fast, slow, signal).calculateNext(cts, price, last)
-            db.save(new)
+            db.pre_save(new)
+            to_save_counter += 1
+
+        if to_save_counter%5000:
+            db.commit()
+
+    db.commit()
     del db
     del rates
 
