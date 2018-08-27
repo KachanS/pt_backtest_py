@@ -25,23 +25,20 @@ def pool_processor(fast, slow, signal, period, raw_rates):
     rates = dict(raw_rates)
     db = DbHelper(fast, slow, signal, period)
     max_ts = db.get_max_ts()
-    to_save_counter = 0
+
     for cts, price in rates.items():
         cts = int(cts)
         price = float(price)
 
         if cts > max_ts:
-            new = Advise(ts=cts, close=price)
             last = db.fetch_last(cts)
             if last is not None:
                 new = MacD(fast, slow, signal).calculateNext(cts, price, last)
-            db.pre_save(new)
-            to_save_counter += 1
+            else:
+                new = MacD(fast, slow, signal).init(cts, period, rates)
 
-        if to_save_counter%5000:
-            db.commit()
-
-    db.commit()
+            if new is not None:
+                db.save(new)
     del db
     del rates
 
@@ -52,7 +49,9 @@ def combine_rate(minute_rates, period_rates):
     return result
 
 if __name__ == '__main__':
-    end = 1506902400#1514764800#time()
+    end = 1506902400
+    end = 1514764800
+    end = time()
 
     config = FileConfig()
 
@@ -66,6 +65,10 @@ if __name__ == '__main__':
     process_count = config.get('APP.POOL_PROCESSES', 4, int)
     max_tasks = config.get('APP.POOL_TASK_PER_CHILD', 10, int)
     start_at = time()
+
+    #for x in pool_data_gen(period, combined_prices):
+    #    fast, slow, signal, period, rates = x
+    #    pool_processor(fast, slow, signal, period, rates)
     pool = Pool(processes=process_count, maxtasksperchild=max_tasks)
     pool.starmap(pool_processor, pool_data_gen(period, combined_prices))
     pool.close()

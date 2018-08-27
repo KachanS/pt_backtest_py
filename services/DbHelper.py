@@ -52,7 +52,7 @@ class DbHelper:
         self.create_table(self.__table)
         cursor = self.db.cursor();
         cursor.execute(self.FETCH_PERIOD_SQL_TPL.format(self.__table), (start, end, period*self.MINUTE, self.slow))
-        return {x[0]:Advise(*x).setKey(self.__key) for x in cursor.fetchall()}
+        return {x[0]:Advise(*x[:-1]).setKey(self.__key) for x in cursor.fetchall()}
 
     def fetch_last(self, ts: int) -> Advise:
         cursor = self.db.cursor()
@@ -61,6 +61,17 @@ class DbHelper:
         if data is None:
             return None
         return Advise(*data[:-2])
+
+    def find_by_ts(self, ts: int) -> Advise:
+        cursor = self.db.cursor()
+        cursor.execute(
+            f'SELECT * FROM {self.__table} WHERE p_slow = %s AND ts = %s ORDER BY ts DESC LIMIT 1',
+            (self.slow, ts)
+        )
+        data = cursor.fetchone()
+        if data is None:
+            return None
+        return Advise(*data[:-1])
 
     def get_max_ts(self) -> int:
         self.create_table(self.__table)
