@@ -22,20 +22,33 @@ def pool_data_gen(period, rates):
                     yield fast, slow, signal, period, rates
 
 def pool_processor(fast, slow, signal, period, raw_rates):
-    rates = dict(raw_rates)
+    rates = [(_ts, _price) for _ts, _price in raw_rates.items()]
     db = DbHelper(fast, slow, signal, period)
     max_ts = db.get_max_ts()
 
-    for cts, price in rates.items():
-        cts = int(cts)
-        price = float(price)
+    min_for_init = MacD(fast, slow, signal).get_min_ts_to_init(int(rates[0][0]), period)
 
-        if cts > max_ts:
-            last = db.fetch_last(cts)
+    last_cache = dict()
+
+    for item in rates:
+        cts, price = item
+        cts = int(cts)
+        pts = cts - cts%(period*60)
+        if pts == cts:
+            pts -= (period*60)
+        price = float(price)
+        initialized = False
+        if cts > max_ts and cts > min_for_init:
+            if not initialized or pts not in last_cache:
+                last_cache[pts] = db.fetch_last(pts + 1)
+
+            last = last_cache[pts]
+
             if last is not None:
                 new = MacD(fast, slow, signal).calculateNext(cts, price, last)
             else:
                 new = MacD(fast, slow, signal).init(cts, period, rates)
+                initialized = True
 
             if new is not None:
                 db.save(new)

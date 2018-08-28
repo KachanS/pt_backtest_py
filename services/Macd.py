@@ -37,12 +37,11 @@ class MacD:
 
         return new
 
-    def init(self, cts: int, period: int, raw_rates: dict):
+    def init(self, cts: int, period: int, raw_rates: []):
         # Main purpose is to fill first value with VALID values
-        period_rates = [(int(ts), float(price)) for ts, price in raw_rates.items() if int(ts) < cts and (int(ts) % (period * 60) == 0)]
+        period_rates = [(int(x[0]), float(x[1])) for x in raw_rates if int(x[0]) < cts and (int(x[0]) % (period * 60) == 0)]
         if not self.__can_be_initialized(len(period_rates)):
             return None
-        print(period, period_rates)
         print(f'There are {len(period_rates)} period rates')
         values = dict(fast=None, slow=None, signal=None)
         acc = dict(close=[], macd=[])
@@ -71,7 +70,7 @@ class MacD:
 
     def get_min_ts_to_init(self, start_ts, period):
         min = max(self.fast, self.slow) + self.signal - 2
-        return period * min * 60 + start_ts
+        return period * min * 60 + start_ts - 1
 
 
     def __can_be_initialized(self, period_rates_count: int):
