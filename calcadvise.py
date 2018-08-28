@@ -15,9 +15,9 @@ def pretty_date(timestamp: int):
     return datetime.fromtimestamp(timestamp, tz=pytz.UTC).strftime('%F %T')
 
 def pool_data_gen(period, rates):
-    for fast in range(2, 31):
-        for signal in range(2, 21):
-            for slow in range(10, 41):
+    for slow in range(10, 41):
+        for fast in range(2, 31):
+            for signal in range(2, 21):
                 if fast + 2 <= slow:
                     yield fast, slow, signal, period, rates
 
@@ -87,6 +87,7 @@ if __name__ == '__main__':
     pool.close()
     pool.join()
     print(f'Done in {time() - start_at} s. Total: {len(list(combined_prices))}')
+    print(f'Combinations: {len(list(pool_data_gen(period, combined_prices)))}')
     #print(f'Done')
 
 
