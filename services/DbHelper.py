@@ -98,6 +98,21 @@ class DbHelper:
     def commit(self):
         self.db.commit()
 
+    def cleanup(self):
+        cursor = self.db.cursor()
+        cursor.execute(f'DROP TABLE IF EXISTS {self.__table}')
+        self.db.commit()
+        self.create_table()
+
+    def execute(self, sql_string: str, params: tuple = None, commit: bool = False):
+        cursor = self.db.cursor()
+        cursor.execute(sql_string, params)
+        if commit:
+            self.db.commit()
+        else:
+            return cursor.fetchall()
+
+
 if __name__ == '__main__':
     res = DbHelper(12, 26, 9, 60).fetch_advises(1527811200, 1529020800)
     print('Res', list([f'{ts}: {x.as_str()}' for ts, x in res.items()]))
