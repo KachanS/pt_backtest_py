@@ -25,9 +25,20 @@ CREATE_TABLE_SQL_TPL = "CREATE TABLE IF NOT EXISTS `{}` ( \
                                 PRIMARY KEY (`ts`, `p_slow`), INDEX(`p_slow`) \
                             ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;"
 
+CREATE_MEMORY_TABLE_TPL = "CREATE TABLE IF NOT EXISTS `{}` ( \
+                                `ts` int(11) NOT NULL, \
+                                `close` decimal(12,4) NOT NULL, \
+                                `macd` decimal(12,4) NOT NULL, \
+                                `signal` decimal(12,4) NOT NULL, \
+                                `hist` decimal(12,4) NOT NULL, \
+                                `advise` tinyint(4) NOT NULL, \
+                                `state` tinyint(4) NOT NULL, \
+                                `p_slow` int(11) NOT NULL \
+                            ) ENGINE=Memory DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;"
+
 def generator(period):
-    for fast in FAST_LIST:
-        for slow in SLOW_LIST:
+    for slow in SLOW_LIST:
+        for fast in FAST_LIST:
             for signal in SIGNAL_LIST:
                 if fast + 2 <= slow:
                     yield fast, slow, signal, period
@@ -36,6 +47,9 @@ def processor(fast, slow, signal, period):
     db = DbHelper(0, 0, 0, 0)
     table_name = f'a_{fast}_{signal}_{period}'
     db.execute(CREATE_TABLE_SQL_TPL.format(table_name), commit=True)
+
+    m_table_name = f'm_{fast}_{slow}_{signal}_{period}'
+    db.execute(CREATE_MEMORY_TABLE_TPL.format(m_table_name), commit=True)
 
     start, = db.execute(f'SELECT MAX(ts) FROM {table_name} WHERE p_slow = {slow}')[0]
     if start is None:
@@ -46,7 +60,6 @@ def processor(fast, slow, signal, period):
     fs.sort(key=lambda i: i[0])
 
     pacc = []
-    prev = None
     for i in fs:
         _ts, _close, _fast, _slow = i
         _ts = int(_ts)
@@ -73,9 +86,8 @@ def processor(fast, slow, signal, period):
 
         _signal = sum(sma_acc)/len(sma_acc)
         _hist = _signal - macd
-        _state = 1 if _hist > 0 else 0
-        #print(_ts, macd, _signal, _hist, _state, sma_acc)
-        #print(f'Prev: ', pacc[-1])
+        _state = 1 if _hist > 0 else 2
+
         prev_hist = pacc[-1][2]
         if _hist > 0 and prev_hist < 0:
             _advise = 1
@@ -88,8 +100,11 @@ def processor(fast, slow, signal, period):
         if _ts % (ONE_MINUTE * period) == 0:
             pacc.append((_ts, macd, _hist))
 
-        db.execute(f'INSERT INTO {table_name} VALUES(%s, %s, %s, %s, %s, %s, %s, %s)', params=(_ts, _close, macd, _signal, _hist, _advise, _state, slow), commit=True)
-    print(f'Done {table_name}')
+        db.execute(f'INSERT INTO {m_table_name} VALUES(%s, %s, %s, %s, %s, %s, %s, %s)', params=(_ts, _close, macd, _signal, _hist, _advise, _state, slow), commit=True)
+    # After all calculations is done COPY data to real table
+    db.execute(f'INSERT INTO `{table_name}` SELECT * FROM `{m_table_name}`', commit=True)
+    db.execute(f'DROP TABLE `{m_table_name}`', commit=True)
+    print(f'Done {fast}_{slow}_{signal}_{period}')
 
 if __name__ == '__main__':
     config = FileConfig()
