@@ -100,7 +100,12 @@ def processor(fast, slow, signal, period):
     # After all calculations is done COPY data to real table
     db.execute(f'INSERT INTO `{table_name}` SELECT * FROM `{m_table_name}`', commit=True)
     db.execute(f'DROP TABLE `{m_table_name}`', commit=True)
-    print(f'Done {fast}_{slow}_{signal}_{period}')
+
+    del db
+    del fs
+    del pacc
+
+    print(f'Done {fast}_{slow}_{signal}_{period} ({m_table_name} => {table_name})')
 
 if __name__ == '__main__':
     config = FileConfig()
