@@ -1,11 +1,7 @@
 from multiprocessing.pool import Pool
 from time import time
-
-from pandas import DataFrame, to_numeric
-
 from config import FileConfig
 from services.DbHelper import DbHelper
-from services.Rate import Rate
 
 ONE_MINUTE = 60
 
