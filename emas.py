@@ -1,4 +1,3 @@
-# Calculate emas
 from multiprocessing.pool import Pool
 from time import time
 
@@ -9,7 +8,9 @@ from services.Rate import Rate
 
 ONE_MINUTE = 60
 
-VALUE_LIST = [12, 26]#range(2, 41)
+VALUE_LIST = range(2, 41)
+
+PERIODS = [30, 60, 120, 240, 1440]
 
 CREATE_TABLE_SQL_TPL = "CREATE TABLE IF NOT EXISTS `{}` ( \
                                 `ts` int(11) NOT NULL, \
@@ -17,6 +18,10 @@ CREATE_TABLE_SQL_TPL = "CREATE TABLE IF NOT EXISTS `{}` ( \
                                 `value` decimal(12,4) NOT NULL, \
                                 PRIMARY KEY (`ts`) \
                             ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;"
+
+
+FETCH_LAST_SQL = 'SELECT source, value FROM {} WHERE ts < {} AND MOD(ts, {}) = 0 ORDER BY ts DESC LIMIT 1'
+
 
 def processor(window: int, period, raw_rates: dict):
     db = DbHelper(0, 0, 0, 0)
@@ -37,31 +42,29 @@ def processor(window: int, period, raw_rates: dict):
 
     cache = dict()
 
-    for item in rates:
-        cts, price = item
+    initialized = False
+    for _item in rates:
+        cts, price = _item
 
         pts = cts - cts % (period * ONE_MINUTE)
         pts_match = pts == cts
         if pts_match:
             pts -= (period * ONE_MINUTE)
 
-        initialized = False
         if cts > min_init_ts:
             ema = None
             if not initialized or pts not in cache:
-                ema_data = db.execute(f'SELECT source, value FROM {table_name} WHERE ts < {pts+1} AND MOD(ts, {period*60}) = 0 ORDER BY ts DESC LIMIT 1')
+                ema_data = db.execute(FETCH_LAST_SQL.format(table_name, pts+1, period*ONE_MINUTE))
                 if len(ema_data):
                     ema = Ema(window, float(ema_data[0][0]), float(ema_data[0][1]))
 
                 if initialized:
                     cache[pts] = ema
-            #print(f'CTS: {cts}; PTS: {pts}; D: {cts % (period * ONE_MINUTE)}')
+
             if ema is not None:
                 new = ema.calculate(price)
             else:
                 sma_src = [x[1] for x in rates if x[0] < cts and x[0] % (period * ONE_MINUTE) == 0]
-                #print(sma_src)
-                #print(f'SMA: {sum(sma_src[-window:])/window}');
                 new = Ema(window, price, sum(sma_src[-window:])/window)
                 initialized = True
 
@@ -71,26 +74,29 @@ def processor(window: int, period, raw_rates: dict):
                     params=(cts, new.source, new.value),
                     commit=True
                 )
-
     del db
     del rates
 
-def generator(period: int, rates: dict):
-    for window in VALUE_LIST:
-        yield window, period, rates
+
+def generator(rates_by_period: dict):
+    for period, rates in rates_by_period.items():
+        for window in VALUE_LIST:
+            yield window, period, rates
+
 
 if __name__ == '__main__':
     config = FileConfig()
 
     start = config.get('APP.START_FROM', 0, int)
-    period = config.get('APP.PERIOD', 60, int)
 
-    end = time()
+    end = int(time())
+
+    combined = dict()
 
     minute_prices = Rate().fetch_close(start, end)
-    prices = Rate().fetch_close(start, end, period)
-
-    combined = Rate.combine(minute_prices, prices)
+    for c_period in PERIODS:
+        prices = Rate().fetch_close(start, end, c_period)
+        combined[c_period] = Rate.combine(minute_prices, prices)
 
     process_count = config.get('APP.POOL_PROCESSES', 4, int)
     max_tasks = config.get('APP.POOL_TASK_PER_CHILD', 10, int)
@@ -101,13 +107,12 @@ if __name__ == '__main__':
 
     if use_pool:
         pool = Pool(processes=process_count, maxtasksperchild=max_tasks)
-        pool.starmap(processor, generator(period, combined))
+        pool.starmap(processor, generator(combined))
         pool.close()
         pool.join()
     else:
-        for x in generator(period, combined):
-            processor(*x)
+        for item in generator(combined):
+            processor(*item)
 
-    print(f'Done in {time() - start_at} s. Total: {len(list(combined))}')
-    print(f'Combinations: {len(list(generator(period, combined)))}')
-    # print(f'Done')
+    print(f'Done in {time() - start_at} s. Total: {sum(map(lambda x:len(x), combined))}')
+    print(f'Combinations: {len(list(generator(combined)))}')
