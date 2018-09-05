@@ -5,9 +5,10 @@ from services.DbHelper import DbHelper
 
 ONE_MINUTE = 60
 
-FAST_LIST = [12]#range(2, 31)
-SLOW_LIST = [26]#range(10, 41)
-SIGNAL_LIST = [9, 10, 11, 12]#range(2, 21)
+FAST_LIST = range(2, 31)
+SLOW_LIST = range(10, 41)
+SIGNAL_LIST = range(2, 21)
+PERIOD_LIST = [30, 60, 120, 240, 1440]
 
 CREATE_TABLE_SQL_TPL = "CREATE TABLE IF NOT EXISTS `{}` ( \
                                 `ts` int(11) NOT NULL, \
@@ -32,12 +33,23 @@ CREATE_MEMORY_TABLE_TPL = "CREATE TABLE IF NOT EXISTS `{}` ( \
                                 `p_slow` int(11) NOT NULL \
                             ) ENGINE=Memory DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;"
 
-def generator(period):
+FETCH_INITIAL_VALS_SQL_TPL = "SELECT `ts`, `macd`, `hist` FROM {} \
+                              WHERE ts < {} and MOD(ts, {}) = 0 and p_slow = {} \
+                              ORDER BY ts DESC limit {}"
+
+FETCH_EMA_SQL_TPL = "SELECT f.ts, f.source, f.value, s.value FROM `{}` as `f` \
+                    INNER JOIN `{}` as `s` on f.ts = s.ts \
+                    WHERE f.ts > {}"
+
+
+def generator():
     for slow in SLOW_LIST:
         for fast in FAST_LIST:
             for signal in SIGNAL_LIST:
-                if fast + 2 <= slow:
-                    yield fast, slow, signal, period
+                for period in PERIOD_LIST:
+                    if fast + 2 <= slow:
+                        yield fast, slow, signal, period
+
 
 def processor(fast, slow, signal, period):
     db = DbHelper(0, 0, 0, 0)
@@ -52,8 +64,8 @@ def processor(fast, slow, signal, period):
         start = 0
     start = int(start)
 
-    fs = db.execute(f'SELECT f.ts, f.source, f.value, s.value FROM `ema_{fast}_{period}` as `f` INNER JOIN `ema_{slow}_{period}` as `s` on f.ts = s.ts WHERE f.ts > {start}')
-    fs.sort(key=lambda i: i[0])
+    fs = db.execute(FETCH_EMA_SQL_TPL.format(f'ema_{fast}_{period}', f'ema_{slow}_{period}', start))
+    fs.sort(key=lambda _i: _i[0])
 
     pacc = []
     for i in fs:
@@ -67,17 +79,22 @@ def processor(fast, slow, signal, period):
         # To calculate current SIGNAL we need previous {N = signal - 1} MACD values
         if len(pacc) < (signal - 1):
             # Load initiap p_acc values or prefill it with 0's
-            vals = db.execute(f'SELECT `ts`, `macd`, `hist` FROM {table_name} WHERE ts < {_ts} and MOD(ts, {ONE_MINUTE * period}) = 0 and p_slow = {slow} ORDER BY ts DESC limit {signal - 1}')
+            vals = db.execute(FETCH_INITIAL_VALS_SQL_TPL.format(
+                table_name,
+                _ts,
+                ONE_MINUTE * period,
+                slow,
+                signal - 1))
             if len(vals) < (signal - 1):
                 _st = _ts - _ts % (60*period)
                 _st -= (signal - 2)*(60*period)
                 pacc = list([(ts, 0.0, 0.0) for ts in range(_st, _ts - len(vals)*(ONE_MINUTE * period), ONE_MINUTE*60)])
-                for x in vals:
-                    pacc.append((int(x[0]), float(x[1]), float(x[2])))
+                for _x in vals:
+                    pacc.append((int(_x[0]), float(_x[1]), float(_x[2])))
             else:
                 pacc = list([(int(i[0]), float(i[1]), float(i[2])) for i in vals])
 
-        sma_acc = [x[1] for x in pacc[-signal+1:]]
+        sma_acc = [_x[1] for _x in pacc[-signal+1:]]
         sma_acc.append(macd)
 
         _signal = sum(sma_acc)/len(sma_acc)
@@ -85,9 +102,9 @@ def processor(fast, slow, signal, period):
         _state = 1 if _hist > 0 else 2
 
         prev_hist = pacc[-1][2]
-        if _hist > 0 and prev_hist < 0:
+        if prev_hist < 0 < _hist:
             _advise = 1
-        elif _hist < 0 and prev_hist > 0:
+        elif _hist < 0 < prev_hist:
             _advise = 2
         else:
             _advise = 3
@@ -96,7 +113,11 @@ def processor(fast, slow, signal, period):
         if _ts % (ONE_MINUTE * period) == 0:
             pacc.append((_ts, macd, _hist))
 
-        db.execute(f'INSERT INTO {m_table_name} VALUES(%s, %s, %s, %s, %s, %s, %s, %s)', params=(_ts, _close, macd, _signal, _hist, _advise, _state, slow), commit=True)
+        db.execute(
+            f'INSERT INTO {m_table_name} VALUES(%s, %s, %s, %s, %s, %s, %s, %s)',
+            params=(_ts, _close, macd, _signal, _hist, _advise, _state, slow),
+            commit=True
+        )
     # After all calculations is done COPY data to real table
     db.execute(f'INSERT INTO `{table_name}` SELECT * FROM `{m_table_name}`', commit=True)
     db.execute(f'DROP TABLE `{m_table_name}`', commit=True)
@@ -107,10 +128,9 @@ def processor(fast, slow, signal, period):
 
     print(f'Done {fast}_{slow}_{signal}_{period} ({m_table_name} => {table_name})')
 
+
 if __name__ == '__main__':
     config = FileConfig()
-
-    period = config.get('APP.PERIOD', 30, int)
 
     process_count = config.get('APP.POOL_PROCESSES', 4, int)
     max_tasks = config.get('APP.POOL_TASK_PER_CHILD', 10, int)
@@ -121,13 +141,12 @@ if __name__ == '__main__':
 
     if use_pool:
         pool = Pool(processes=process_count, maxtasksperchild=max_tasks)
-        pool.starmap(processor, generator(period))
+        pool.starmap(processor, generator())
         pool.close()
         pool.join()
     else:
-        for x in generator(period):
+        for x in generator():
             processor(*x)
 
     print(f'Done in {time() - start_at} s.')
-    print(f'Combinations: {len(list(generator(period)))}')
-    # print(f'Done')
+    print(f'Combinations: {len(list(generator()))}')
