@@ -1,6 +1,7 @@
 from multiprocessing.pool import Pool
 from time import time
 from config import FileConfig
+from models.Advise import Advise
 from services.DbHelper import DbHelper
 
 ONE_MINUTE = 60
@@ -53,6 +54,7 @@ def generator():
 
 def processor(fast, slow, signal, period):
     db = DbHelper(0, 0, 0, 0)
+    minute_period = ONE_MINUTE * period
     table_name = f'a_{fast}_{signal}_{period}'
     db.execute(CREATE_TABLE_SQL_TPL.format(table_name), commit=True)
 
@@ -82,13 +84,13 @@ def processor(fast, slow, signal, period):
             vals = db.execute(FETCH_INITIAL_VALS_SQL_TPL.format(
                 table_name,
                 _ts,
-                ONE_MINUTE * period,
+                minute_period,
                 slow,
                 signal - 1))
             if len(vals) < (signal - 1):
-                _st = _ts - _ts % (60*period)
-                _st -= (signal - 2)*(60*period)
-                pacc = list([(ts, 0.0, 0.0) for ts in range(_st, _ts - len(vals)*(ONE_MINUTE * period), ONE_MINUTE*60)])
+                _st = _ts - _ts % minute_period
+                _st -= (signal - 2) * minute_period
+                pacc = list([(ts, 0.0, 0.0) for ts in range(_st, _ts - len(vals)*minute_period, minute_period)])
                 for _x in vals:
                     pacc.append((int(_x[0]), float(_x[1]), float(_x[2])))
             else:
@@ -98,19 +100,19 @@ def processor(fast, slow, signal, period):
         sma_acc.append(macd)
 
         _signal = sum(sma_acc)/len(sma_acc)
-        _hist = _signal - macd
-        _state = 1 if _hist > 0 else 2
+        _hist = macd - _signal
+        _state = Advise.BUY if _hist > 0 else Advise.SELL
 
         prev_hist = pacc[-1][2]
         if prev_hist < 0 < _hist:
-            _advise = 1
+            _advise = Advise.BUY
         elif _hist < 0 < prev_hist:
-            _advise = 2
+            _advise = Advise.SELL
         else:
-            _advise = 3
+            _advise = Advise.HOLD
 
         # Fill period acc
-        if _ts % (ONE_MINUTE * period) == 0:
+        if _ts % minute_period == 0:
             pacc.append((_ts, macd, _hist))
 
         db.execute(
