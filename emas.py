@@ -90,6 +90,7 @@ if __name__ == '__main__':
     start = config.get('APP.START_FROM', 0, int)
 
     end = int(time())
+    end -= end % (ONE_MINUTE * 60 * 24)
 
     combined = dict()
 
