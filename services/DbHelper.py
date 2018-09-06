@@ -45,7 +45,7 @@ class DbHelper:
         self.signal = signal
         self.period = period
 
-        self.__table = '_'.join(map(str, [self.fast, self.signal, self.period]))
+        self.__table = '_'.join(map(str, ['a', self.fast, self.signal, self.period]))
         self.__key = '_'.join(map(str, [self.fast, self.slow, self.signal, self.period]))
 
     def fetch_advises(self, start: int, end: int, period: int = 1):
