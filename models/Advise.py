@@ -4,11 +4,10 @@ class Advise:
     SELL = 2
     HOLD = 3
 
-    def __init__(self, ts: int, close: int, fast: float = 0.0, slow: float = 0.0, signal: float = 0.0, hist: float = 0.0, advise: int = 0, state: int = 0):
+    def __init__(self, ts: int, close: int, macd: float = 0.0, signal: float = 0.0, hist: float = 0.0, advise: int = 0, state: int = 0):
         self.ts = ts
         self.close = float(close)
-        self.fast = float(fast)
-        self.slow = float(slow)
+        self.fast = float(macd)
         self.signal = float(signal)
         self.hist = float(hist)
         self.advise = advise
@@ -27,3 +26,6 @@ class Advise:
 
     def as_tuple(self):
         return (self.ts, self.close, self.fast, self.slow, self.signal, self.hist, self.advise, self.state)
+
+    def info(self):
+        return dict(ts=self.ts, close=self.close, histogramm=self.hist, advise=self.advise, state=self.state)
