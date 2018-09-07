@@ -26,12 +26,6 @@ class Rate:
 
         return response['rates']
 
-    @staticmethod
-    def combine(minute_rates, period_rates):
-        result = dict(minute_rates)
-        for ts, price in period_rates.items():
-            result[ts] = price
-        return result
 
 if __name__ == '__main__':
     end = time()

@@ -1,5 +1,8 @@
+import datetime
 from multiprocessing.pool import Pool
 from time import time
+
+import pytz
 
 from config import FileConfig
 from models.Ema import Ema
@@ -20,7 +23,7 @@ CREATE_TABLE_SQL_TPL = "CREATE TABLE IF NOT EXISTS `{}` ( \
                             ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;"
 
 
-FETCH_LAST_SQL = 'SELECT source, value FROM {} WHERE ts < {} AND MOD(ts, {}) = 0 ORDER BY ts DESC LIMIT 1'
+FETCH_LAST_SQL = 'SELECT source, value, ts FROM {} WHERE ts < {} AND MOD(ts + 60, {}) = 0 ORDER BY ts DESC LIMIT 1'
 
 
 def processor(window: int, period, raw_rates: dict):
@@ -47,9 +50,6 @@ def processor(window: int, period, raw_rates: dict):
         cts, price = _item
 
         pts = cts - cts % (period * ONE_MINUTE)
-        pts_match = pts == cts
-        if pts_match:
-            pts -= (period * ONE_MINUTE)
 
         if cts > min_init_ts:
             ema = None
@@ -57,7 +57,6 @@ def processor(window: int, period, raw_rates: dict):
                 ema_data = db.execute(FETCH_LAST_SQL.format(table_name, pts+1, period*ONE_MINUTE))
                 if len(ema_data):
                     ema = Ema(window, float(ema_data[0][0]), float(ema_data[0][1]))
-
                 if initialized:
                     cache[pts] = ema
 
@@ -83,6 +82,9 @@ def generator(rates_by_period: dict):
         for window in VALUE_LIST:
             yield window, period, rates
 
+def pretty_ts(ts):
+    return datetime.datetime.fromtimestamp(int(ts), tz=pytz.UTC).strftime('%Y-%m-%d %T')
+
 
 if __name__ == '__main__':
     config = FileConfig()
@@ -96,8 +98,7 @@ if __name__ == '__main__':
 
     minute_prices = Rate().fetch_close(start, end)
     for c_period in PERIODS:
-        prices = Rate().fetch_close(start, end, c_period)
-        combined[c_period] = Rate.combine(minute_prices, prices)
+        combined[c_period] = minute_prices
 
     process_count = config.get('APP.POOL_PROCESSES', 4, int)
     max_tasks = config.get('APP.POOL_TASK_PER_CHILD', 10, int)
