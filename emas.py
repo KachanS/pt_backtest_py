@@ -23,11 +23,13 @@ CREATE_TABLE_SQL_TPL = "CREATE TABLE IF NOT EXISTS `{}` ( \
                             ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;"
 
 
-FETCH_LAST_SQL = 'SELECT source, value, ts FROM {} WHERE ts < {} AND MOD(ts + 60, {}) = 0 ORDER BY ts DESC LIMIT 1'
+FETCH_LAST_SQL = 'SELECT source, value FROM {} WHERE ts < {} AND MOD(ts + 60, {}) = 0 ORDER BY ts DESC LIMIT 1'
 
 
 def processor(window: int, period, raw_rates: dict):
     db = DbHelper(0, 0, 0, 0)
+
+    one_period = period * ONE_MINUTE
 
     table_name = f'ema_{window}_{period}'
     # Create table
@@ -41,7 +43,7 @@ def processor(window: int, period, raw_rates: dict):
     rates = [(int(_ts), float(_price)) for _ts, _price in raw_rates.items() if int(_ts) > last_ts]
     rates.sort(key=lambda i: i[0])
 
-    min_init_ts = min(map(int, raw_rates.keys())) + window * period * ONE_MINUTE
+    min_init_ts = min(map(int, raw_rates.keys())) + window * one_period
 
     cache = dict()
 
@@ -49,12 +51,12 @@ def processor(window: int, period, raw_rates: dict):
     for _item in rates:
         cts, price = _item
 
-        pts = cts - cts % (period * ONE_MINUTE)
+        pts = cts - cts % one_period
 
         if cts > min_init_ts:
             ema = None
             if not initialized or pts not in cache:
-                ema_data = db.execute(FETCH_LAST_SQL.format(table_name, pts+1, period*ONE_MINUTE))
+                ema_data = db.execute(FETCH_LAST_SQL.format(table_name, pts+1, one_period))
                 if len(ema_data):
                     ema = Ema(window, float(ema_data[0][0]), float(ema_data[0][1]))
                 if initialized:
@@ -63,7 +65,7 @@ def processor(window: int, period, raw_rates: dict):
             if ema is not None:
                 new = ema.calculate(price)
             else:
-                sma_src = [x[1] for x in rates if x[0] < cts and x[0] % (period * ONE_MINUTE) == 0]
+                sma_src = [x[1] for x in rates if x[0] < cts and x[0] % one_period == 0]
                 new = Ema(window, price, sum(sma_src[-window:])/window)
                 initialized = True
 
@@ -81,6 +83,7 @@ def generator(rates_by_period: dict):
     for period, rates in rates_by_period.items():
         for window in VALUE_LIST:
             yield window, period, rates
+
 
 def pretty_ts(ts):
     return datetime.datetime.fromtimestamp(int(ts), tz=pytz.UTC).strftime('%Y-%m-%d %T')
