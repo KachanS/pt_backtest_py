@@ -58,7 +58,7 @@ def processor(fast, slow, signal, period):
     table_name = f'a_{fast}_{signal}_{period}'
     db.execute(CREATE_TABLE_SQL_TPL.format(table_name), commit=True)
 
-    m_table_name = f'm_{fast}_{slow}_{signal}_{period}'
+    m_table_name = f'm_{fast}_{signal}_{period}'
     db.execute(CREATE_MEMORY_TABLE_TPL.format(m_table_name), commit=True)
 
     start, = db.execute(f'SELECT MAX(ts) FROM {table_name} WHERE p_slow = {slow}')[0]
@@ -120,9 +120,26 @@ def processor(fast, slow, signal, period):
             params=(_ts, _close, macd, _signal, _hist, _advise, _state, slow),
             commit=True
         )
+    # Insert system flag to be sure this slow period is fully calculated
+    db.execute(
+        f'INSERT INTO {m_table_name} VALUES(%s, %s, %s, %s, %s, %s, %s, %s)',
+        params=(0, 0, 0, 0, 0, 0, 0, slow),
+        commit=True
+    )
+
+    estimated_count = 4#max(SLOW_LIST) - max(fast + 2, min(SLOW_LIST)) + 1
+    real_count,  = db.execute(f'SELECT COUNT(DISTINCT(p_slow)) FROM `{m_table_name}` WHERE `ts` = 0')[0]
+
     # After all calculations is done COPY data to real table
-    db.execute(f'INSERT INTO `{table_name}` SELECT * FROM `{m_table_name}`', commit=True)
-    db.execute(f'DROP TABLE `{m_table_name}`', commit=True)
+    # Check if table is fully filled and copy if it is
+    if real_count == estimated_count:
+        db.execute(f'DELETE FROM `{table_name}` WHERE ts = 0', commit=True)
+        _s = time()
+        db.execute(f'INSERT INTO `{table_name}` SELECT * FROM `{m_table_name}`', commit=True)
+        print(f'Copy {m_table_name} takes {time() - _s}s')
+        _s = time()
+        db.execute(f'DROP TABLE `{m_table_name}`', commit=True)
+        print(f'Drop {m_table_name} takes {time() - _s}s')
 
     del db
     del fs
