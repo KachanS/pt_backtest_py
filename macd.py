@@ -127,12 +127,12 @@ def processor(fast, slow, signal, period):
         commit=True
     )
 
-    estimated_count = 4#max(SLOW_LIST) - max(fast + 2, min(SLOW_LIST)) + 1
+    estimated_count = max(SLOW_LIST) - max(fast + 2, min(SLOW_LIST)) + 1
     real_count,  = db.execute(f'SELECT COUNT(DISTINCT(p_slow)) FROM `{m_table_name}` WHERE `ts` = 0')[0]
-
+    print(f'Cur: {real_count}; Est: {estimated_count} for FAST = {fast}')
     # After all calculations is done COPY data to real table
     # Check if table is fully filled and copy if it is
-    if real_count == estimated_count:
+    if real_count >= estimated_count:
         db.execute(f'DELETE FROM `{table_name}` WHERE ts = 0', commit=True)
         _s = time()
         db.execute(f'INSERT INTO `{table_name}` SELECT * FROM `{m_table_name}`', commit=True)
