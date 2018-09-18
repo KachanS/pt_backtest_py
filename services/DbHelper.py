@@ -1,9 +1,6 @@
-import mysql.connector
-from mysql.connector import ProgrammingError, connect
-
 from config import FileConfig
 from models.Advise import Advise
-
+from mysql.connector import ProgrammingError, connect
 
 class DbHelper:
 
@@ -20,7 +17,7 @@ class DbHelper:
                                 PRIMARY KEY (`ts`, `p_slow`), INDEX(`p_slow`) \
                             ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;"
 
-    FETCH_PERIOD_SQL_TPL = "SELECT * FROM `{}` WHERE `ts` >= %s AND `ts` <= %s AND MOD(`ts`, %s) = 0 AND `p_slow` = %s ORDER BY `ts` ASC"
+    FETCH_PERIOD_SQL_TPL = "SELECT `ts`, `close`, `advise`, `state` FROM `{}` WHERE `ts` BETWEEN %s AND %s AND `p_slow` = %s ORDER BY `ts` ASC"
 
     MINUTE = 60
 
@@ -51,8 +48,8 @@ class DbHelper:
     def fetch_advises(self, start: int, end: int, period: int = 1):
         self.create_table(self.__table)
         cursor = self.db.cursor();
-        cursor.execute(self.FETCH_PERIOD_SQL_TPL.format(self.__table), (start, end, period*self.MINUTE, self.slow))
-        return {x[0]:Advise(*x[:-1]).setKey(self.__key) for x in cursor.fetchall()}
+        cursor.execute(self.FETCH_PERIOD_SQL_TPL.format(self.__table), (start, end, self.slow))
+        return {x[0]:Advise(ts=x[0], close=x[1], advise=x[2], state=x[3]) for x in cursor.fetchall()}
 
     def fetch_last(self, ts: int) -> Advise:
         cursor = self.db.cursor()
