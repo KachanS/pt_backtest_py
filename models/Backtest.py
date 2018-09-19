@@ -8,9 +8,6 @@ config = FileConfig()
 
 Base = declarative_base()
 
-engine = create_engine(config.get('APP.BT_CONNECTION_STRING', ''), pool_recycle=60)
-Session = scoped_session(sessionmaker(bind=engine))
-
 class Backtest(Base):
 
     __tablename__ = 'main_backtest'
@@ -49,12 +46,18 @@ class Backtest(Base):
     TYPE_LONG = 1;
     TYPE_SHORT = 2;
 
+    CON_STRING = ''
+
     def __repr__(self):
         return f'Total. #{self.id} W: {self.total_week}, M1: {self.total_month1}, M2: {self.total_month3}, M3: {self.total_month6}'
 
     @staticmethod
+    def __get_session():
+        return sessionmaker(bind=create_engine(Backtest.CON_STRING, pool_recycle=60))()
+
+    @staticmethod
     def find_by_params(in_params: dict, out_params: dict, type: int, is_rt: int = 1):
-        session = Session()
+        session = Backtest.__get_session()
         filters = [
             Backtest.buy_fast == in_params[0],
             Backtest.buy_slow == in_params[1],
@@ -74,7 +77,7 @@ class Backtest(Base):
 
     @staticmethod
     def create(in_params: tuple, out_params: tuple, _type: int, start: int, end: int, statistics: dict):
-        session = Session()
+        session = Backtest.__get_session()
 
         in_name = f'{in_params[0]}_{in_params[1]}_{in_params[2]}_{in_params[3]}'
         out_name = f'{out_params[0]}_{out_params[1]}_{out_params[2]}_{out_params[3]}'
@@ -108,7 +111,7 @@ class Backtest(Base):
 
     @staticmethod
     def do_update(bid: int, start: int, end: int, statistics: dict):
-        session = Session()
+        session = Backtest.__get_session()
         session.query(Backtest).filter(Backtest.id == bid).update({
             'ts_start': start,
             'ts_end': end,
@@ -132,8 +135,10 @@ class Backtest(Base):
               f'AND `ts_end` = {end} ' \
               f'AND `active` > 0'
 
-        session = Session()
+        session = Backtest.__get_session()
         c,  = session.execute(SQL).fetchone()
         session.close()
         return c >= 2
 
+
+Backtest.CON_STRING = config.get('APP.BT_CONNECTION_STRING', '')
