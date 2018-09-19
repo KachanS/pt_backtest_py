@@ -16,10 +16,10 @@ BACKTEST_SHORT = 2
 EMERGENCY_ACC = 8 # percentage, 0 means no aggregation
 NORMILIZE_ACC = 0 # percentage, 0 means no aggregation
 
-FAST_LIST = range(2, 31)
-SLOW_LIST = range(10, 41)
-SIGNAL_LIST = range(2, 21)
-PERIOD_LIST = [30, 60, 120, 240, 1440]
+FAST_LIST = [7]#range(2, 31)
+SLOW_LIST = [10]#range(10, 41)
+SIGNAL_LIST = [2, 5]#range(2, 21)
+PERIOD_LIST = [60]#[30, 60, 120, 240, 1440]
 
 DEBUG = True
 
@@ -109,6 +109,7 @@ def generator2(start, end):
                 start,
                 end
             )
+
             print(f'{[(fast_in, slow_in, signal_in, period_in), (fast_out, slow_out, signal_out, period_out)]} already_calculated: {already_calculated}')
             if already_calculated:
                 continue
@@ -140,7 +141,7 @@ def generator2(start, end):
             if db_cache[out_k] == dict():
                 print(f'No OUT data. {out_k}')
                 continue
-
+            print(f'Yielded ....')
             yield (
                 start,
                 end,
@@ -150,12 +151,23 @@ def generator2(start, end):
                 dict(db_cache[out_k])
             )
 
-def processor2(start, end, p_in, p_out, adv_in, adv_out):
+def processor2(start, end, p_in, p_out):
+    already_calculated = ModelBacktest\
+                            .is_calculated(p_in, p_out, start, end)
+    if already_calculated:
+        print(f'{p_in} -> {p_out} already calculated')
+        return
+
     _s = time()
+
     b = Backtest(p_in, p_out, start, end)
     b.set_emergency_percentage(EMERGENCY_ACC)
     b.set_normilize_percentage(NORMILIZE_ACC)
-    statistics = b.calculate(adv_in, adv_out)
+
+    statistics = b.calculate(
+        DbHelper(*p_in).fetch_advises(start, end),
+        DbHelper(*p_out).fetch_advises(start, end)
+    )
 
     for _type in [ModelBacktest.TYPE_LONG, ModelBacktest.TYPE_SHORT]:
         last = ModelBacktest.find_by_params(p_in, p_out, _type)
@@ -164,8 +176,6 @@ def processor2(start, end, p_in, p_out, adv_in, adv_out):
         else:
             ModelBacktest.do_update(last.id, start, end, statistics[_type])
     del b
-    del adv_in
-    del adv_out
     print(f'{[p_in, p_out]}: {time() - _s}')
 
 
@@ -185,11 +195,11 @@ if __name__ == '__main__':
 
     if use_pool:
         pool = Pool(processes=process_count, maxtasksperchild=max_tasks)
-        pool.starmap(processor2, generator2(start, end))
+        pool.starmap(processor2, generator(start, end))
         pool.close()
         pool.join()
     else:
-        for item in generator2(start, end):
+        for item in generator(start, end):
             processor2(*item)
 
     print(f'Done in {time() - start_at}s')
