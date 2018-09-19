@@ -55,7 +55,7 @@ class Backtest:
         return self.__calculate_length(self.__emergency_percentage, period)
 
     def __all_is(self, acc, type):
-        return all([a.state == type for a in acc])
+        return all([a.advise == type for a in acc])
 
     def __all_is_buy(self, acc):
         return self.__all_is(acc, Advise.BUY)
@@ -147,7 +147,6 @@ class Backtest:
         fast_in, slow_in, signal_in, period_in = self.__p_in
         fast_out, slow_out, signal_out, period_out = self.__p_out
 
-        #_t = time()
         db = None
         if adv_in is not None:
             advises_in = adv_in
@@ -189,7 +188,7 @@ class Backtest:
         out_em_acc_length = self.__get_emer_length(period_out)
 
         while cts <= self.__end:
-            one_in_perion = ONE_MINUTE * period_in
+            one_in_period = ONE_MINUTE * period_in
             one_out_period = ONE_MINUTE * period_out
 
             cin_advise = advises_in[cts] if cts in advises_in else None
@@ -199,12 +198,12 @@ class Backtest:
                 cts += ONE_MINUTE
                 continue
 
-            cur_interval_in = (cts - cts % one_in_perion) + one_in_perion
+            cur_interval_in = (cts - cts % one_in_period) + one_in_period
             cur_interval_out = (cts - cts % one_out_period) + one_out_period
 
             for _type in [Backtest.TYPE_LONG, Backtest.TYPE_SHORT]:
                 recently_opened = deal[_type] is not None \
-                                  and (cur_interval_in - deal[_type]['ts_enter']) <= 2 * one_in_perion
+                                  and (cur_interval_in - deal[_type]['ts_enter']) <= 2 * one_in_period
 
                 recently_closed = deal[_type] is None \
                                   and last_deal[_type] is not None \
@@ -262,7 +261,7 @@ class Backtest:
                 elif cout_advise is not None:
                     closed_deal = self.__close_deal(deal[_type], flags, cts, cout_advise.close)
                     if closed_deal is not None:
-                        pts = deal[_type]['ts_enter'] - deal[_type]['ts_enter'] % one_in_perion + one_in_perion
+                        pts = deal[_type]['ts_enter'] - deal[_type]['ts_enter'] % one_in_period + one_in_period
                         deals[_type][pts] = deal[_type]
                         last_deal[_type] = deal[_type]
                         deal[_type] = None

@@ -115,7 +115,6 @@ def generator2(start, end):
 
             in_k = '_'.join(map(str, [fast_in, slow_in, signal_in, period_in]))
             out_k = '_'.join(map(str, [fast_out, slow_out, signal_out, period_out]))
-            print(f'{in_k} -> {out_k} isn\'t calculated yet')
             if in_k not in db_cache:
                 try:
                     db_cache[in_k] = DbHelper(fast_in, slow_in, signal_in, period_in)\
@@ -153,7 +152,10 @@ def generator2(start, end):
 
 def processor2(start, end, p_in, p_out, adv_in, adv_out):
     _s = time()
-    statistics = Backtest(p_in, p_out, start, end).calculate(adv_in, adv_out)
+    b = Backtest(p_in, p_out, start, end)
+    b.set_emergency_percentage(EMERGENCY_ACC)
+    b.set_normilize_percentage(NORMILIZE_ACC)
+    statistics = b.calculate(adv_in, adv_out)
 
     for _type in [ModelBacktest.TYPE_LONG, ModelBacktest.TYPE_SHORT]:
         last = ModelBacktest.find_by_params(p_in, p_out, _type)
@@ -161,6 +163,9 @@ def processor2(start, end, p_in, p_out, adv_in, adv_out):
             ModelBacktest.create(p_in, p_out, _type, start, end, statistics[_type])
         else:
             ModelBacktest.do_update(last.id, start, end, statistics[_type])
+    del b
+    del adv_in
+    del adv_out
     print(f'{[p_in, p_out]}: {time() - _s}')
 
 
