@@ -63,6 +63,15 @@ class Backtest:
     def __all_is_sell(self, acc):
         return self.__all_is(acc, Advise.SELL)
 
+    def __all_em_is(self, acc, type):
+        return all([a.state == type for a in acc])
+
+    def __all_em_is_buy(self, acc):
+        return self.__all_em_is(acc, Advise.BUY)
+
+    def __all_em_is_sell(self, acc):
+        return self.__all_em_is(acc, Advise.SELL)
+
     def __start_deal(self, flags, ts: int, price: float):
         _, recently_closed, open_appeared, _, _, close_disappeared, interval_has_deal = flags
         is_emer = recently_closed and close_disappeared
@@ -209,7 +218,9 @@ class Backtest:
                                   and last_deal[_type] is not None \
                                   and not last_deal[_type]['emergency_exit'] \
                                   and (cur_interval_out - last_deal[_type]['ts_exit']) <= 2 * one_out_period
-
+                # cts = 1536318060
+                # cur_interval_out = (1536318060 - 1536318060 % 3600) + 3600 = (1536318060 - 60) + 3600 = 1536321600 (Sep 7, 12:00)
+                # 68400 <= 7200
                 if cin_advise is not None:
                     accumulators[Backtest.MODE_NORMAL][Backtest.DIR_IN][_type].append(cin_advise)
                     accumulators[Backtest.MODE_EMERGENCY][Backtest.DIR_IN][_type].append(cin_advise)
@@ -235,13 +246,13 @@ class Backtest:
                 if _type == Backtest.TYPE_LONG:
                     open_appeared = cin_advise is not None and self.__all_is_buy(accumulators[Backtest.MODE_NORMAL][Backtest.DIR_IN][_type])
                     close_appeared = cout_advise is not None and self.__all_is_sell(accumulators[Backtest.MODE_NORMAL][Backtest.DIR_OUT][_type])
-                    open_disappeared = self.__all_is_sell(accumulators[Backtest.MODE_EMERGENCY][Backtest.DIR_IN][_type])
-                    close_disappeared = self.__all_is_buy(accumulators[Backtest.MODE_EMERGENCY][Backtest.DIR_OUT][_type])
+                    open_disappeared = self.__all_em_is_sell(accumulators[Backtest.MODE_EMERGENCY][Backtest.DIR_IN][_type])
+                    close_disappeared = self.__all_em_is_buy(accumulators[Backtest.MODE_EMERGENCY][Backtest.DIR_OUT][_type])
                 elif _type == Backtest.TYPE_SHORT:
                     open_appeared = cin_advise is not None and self.__all_is_sell(accumulators[Backtest.MODE_NORMAL][Backtest.DIR_IN][_type])
                     close_appeared = cout_advise is not None and self.__all_is_buy(accumulators[Backtest.MODE_NORMAL][Backtest.DIR_OUT][_type])
-                    open_disappeared = self.__all_is_buy(accumulators[Backtest.MODE_EMERGENCY][Backtest.DIR_IN][_type])
-                    close_disappeared = self.__all_is_sell(accumulators[Backtest.MODE_EMERGENCY][Backtest.DIR_OUT][_type])
+                    open_disappeared = self.__all_em_is_buy(accumulators[Backtest.MODE_EMERGENCY][Backtest.DIR_IN][_type])
+                    close_disappeared = self.__all_em_is_sell(accumulators[Backtest.MODE_EMERGENCY][Backtest.DIR_OUT][_type])
                 else:
                     raise ValueError(f'Invalid backtest type "{type}" given')
 
@@ -282,6 +293,11 @@ class Backtest:
                         deal[_type]['ts_exit'] = last_advise.ts
 
                         deals[_type][cts] = deal[_type]
+
+        if not len(deals[Backtest.TYPE_LONG]):
+            return None
+        if not len(deals[Backtest.TYPE_SHORT]):
+            return None
 
         statistics = dict()
         statistics[Backtest.TYPE_LONG] = self.__calculate_statistics(deals[Backtest.TYPE_LONG], Backtest.TYPE_LONG)

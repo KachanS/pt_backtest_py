@@ -16,37 +16,12 @@ BACKTEST_SHORT = 2
 EMERGENCY_ACC = 8 # percentage, 0 means no aggregation
 NORMILIZE_ACC = 0 # percentage, 0 means no aggregation
 
-FAST_LIST = [7]#range(2, 31)
-SLOW_LIST = [10]#range(10, 41)
-SIGNAL_LIST = [2, 5]#range(2, 21)
-PERIOD_LIST = [60]#[30, 60, 120, 240, 1440]
+FAST_LIST = range(2, 31)
+SLOW_LIST = range(10, 41)
+SIGNAL_LIST = range(2, 21)
+PERIOD_LIST = [30, 60, 120, 240, 1440]
 
 DEBUG = True
-
-def startNewDeal(flags, ts: int, price: float):
-    _, recently_closed, open_appeared, _, _, close_disappeared, interval_has_deal = flags
-    is_emer = recently_closed and close_disappeared
-    if open_appeared or is_emer:
-        if not interval_has_deal:
-            return dict(
-                ts_enter=ts,
-                price_enter=price,
-                emergency_enter=is_emer,
-                emergency_exit=False
-            )
-
-    return None
-
-def closeDeal(deal, flags, ts: int, price: float) -> dict:
-    recently_opened, _, _, close_appeared, open_disappeared, _, _ = flags
-    is_emer = recently_opened and open_disappeared
-    if close_appeared or is_emer:
-        deal['ts_exit'] = ts
-        deal['price_exit'] = price
-        deal['emergency_exit'] = is_emer
-        return deal
-
-    return None
 
 def all_is(acc, type):
     return all([a.state == type for a in acc])
@@ -57,26 +32,23 @@ def all_is_buy(acc):
 def all_is_sell(acc):
     return all_is(acc, Advise.SELL)
 
-def create_logger():
-    debug = FileConfig().get('APP.DEBUG', False, bool)
-    return lambda m: print(m) if debug else None
-
 def generator(start, end):
-    for fast_in, slow_in, signal_in, period_in in product(FAST_LIST, SLOW_LIST, SIGNAL_LIST, PERIOD_LIST):
-        for fast_out, slow_out, signal_out, period_out in product(FAST_LIST, SLOW_LIST, SIGNAL_LIST, PERIOD_LIST):
-            if fast_in + 2 > slow_in:
+    for f_i, s_i, si_i, p_i, f_o, s_o, si_o, p_o in \
+        product(FAST_LIST, SLOW_LIST, SIGNAL_LIST, PERIOD_LIST, FAST_LIST, SLOW_LIST, SIGNAL_LIST, PERIOD_LIST):
+            if f_i + 2 > s_i:
                 continue
-            if fast_out + 2 > slow_out:
+            if f_o + 2 > s_o:
                 continue
-            if period_in > period_out:
+            if p_i > p_o:
                 continue
 
-            yield (
-                start,
-                end,
-                (fast_in, slow_in, signal_in, period_in),
-                (fast_out, slow_out, signal_out, period_out)
-            )
+            if True or (f_i == f_o and s_i == s_o and si_i == si_o):
+                yield (
+                    start,
+                    end,
+                    (f_i, s_i, si_i, p_i),
+                    (f_o, s_o, si_o, p_o)
+                )
 
 def processor(start, end, p_in, p_out):
     statistics = Backtest(p_in, p_out, start, end).calculate()
@@ -170,19 +142,21 @@ def processor2(start, end, p_in, p_out):
     )
 
     for _type in [ModelBacktest.TYPE_LONG, ModelBacktest.TYPE_SHORT]:
-        last = ModelBacktest.find_by_params(p_in, p_out, _type)
-        if last is None:
-            ModelBacktest.create(p_in, p_out, _type, start, end, statistics[_type])
+        if statistics[_type] is not None:
+            last = ModelBacktest.find_by_params(p_in, p_out, _type)
+            if last is None:
+                ModelBacktest.create(p_in, p_out, _type, start, end, statistics[_type])
+            else:
+                ModelBacktest.do_update(last.id, start, end, statistics[_type])
         else:
-            ModelBacktest.do_update(last.id, start, end, statistics[_type])
+            print(f'Can not calculate statistics for {[p_in, p_out]}')
     del b
     print(f'{[p_in, p_out]}: {time() - _s}')
-
 
 if __name__ == '__main__':
     config = FileConfig()
 
-    end = time()
+    end = 1537514011#time()
     end -= end%ONE_DAY
 
     start = end - 180*ONE_DAY
