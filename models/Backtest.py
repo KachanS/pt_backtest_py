@@ -95,10 +95,10 @@ class Backtest(Base):
                              data=f'{dumps(dict(statistics=statistics))}',
                              extend='|main.backtest|',
                              name=f'{type_name}: In {in_name} -> Out {out_name}',
-                             total_month6=float(statistics['4']['total']),
-                             total_month3=float(statistics['3']['total']),
-                             total_month1=float(statistics['2']['total']),
-                             total_week=float(statistics['1']['total']),
+                             total_month6=float(statistics['4']['total'] - statistics['4']['fees']),
+                             total_month3=float(statistics['3']['total'] - statistics['3']['fees']),
+                             total_month1=float(statistics['2']['total'] - statistics['2']['fees']),
+                             total_week=float(statistics['1']['total'] - statistics['1']['fees']),
                              ts_start=start,
                              ts_end=end,
                              is_rt=1,
@@ -116,10 +116,10 @@ class Backtest(Base):
             'ts_start': start,
             'ts_end': end,
             'data': f'{dumps(dict(statistics=statistics))}',
-            'total_month6': float(statistics['4']['total']),
-            'total_month3': float(statistics['4']['total']),
-            'total_month1': float(statistics['4']['total']),
-            'total_week': float(statistics['4']['total'])
+            'total_month6': float(statistics['4']['total'] - statistics['4']['fees']),
+            'total_month3': float(statistics['3']['total'] - statistics['3']['fees']),
+            'total_month1': float(statistics['2']['total'] - statistics['2']['fees']),
+            'total_week': float(statistics['1']['total'] - statistics['1']['fees'])
         })
 
         session.commit()
