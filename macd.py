@@ -1,3 +1,4 @@
+from itertools import product
 from multiprocessing.pool import Pool
 from time import time
 from config import FileConfig
@@ -42,13 +43,21 @@ FETCH_EMA_SQL_TPL = "SELECT f.ts, f.source, f.value, s.value FROM `{}` as `f` \
                     INNER JOIN `{}` as `s` on f.ts = s.ts \
                     WHERE f.ts > {}"
 
+def combination_filter(fast, slow, signal, period):
+    if fast + 2 > slow:
+        return False
+    if (fast + slow + signal) % 4 != 0:
+        return False
+    return True
+
 
 def generator():
     for fast in FAST_LIST:
         for signal in SIGNAL_LIST:
             for slow in SLOW_LIST:
                 for period in PERIOD_LIST:
-                    if fast + 2 <= slow:
+                    # if fast + 2 <= slow:
+                    if combination_filter(fast, slow, signal, period):
                         yield fast, slow, signal, period
 
 
@@ -127,7 +136,8 @@ def processor(fast, slow, signal, period):
         commit=True
     )
 
-    estimated_count = max(SLOW_LIST) - max(fast + 2, min(SLOW_LIST)) + 1
+    # estimated_count = max(SLOW_LIST) - max(fast + 2, min(SLOW_LIST)) + 1
+    estimated_count = len([1 for _sig in SLOW_LIST if combination_filter(fast, _sig, signal, period)])
     real_count,  = db.execute(f'SELECT COUNT(DISTINCT(p_slow)) FROM `{m_table_name}` WHERE `ts` = 0')[0]
     print(f'Cur: {real_count}; Est: {estimated_count} for FAST = {fast}')
     # After all calculations is done COPY data to real table
