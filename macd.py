@@ -35,7 +35,7 @@ CREATE_MEMORY_TABLE_TPL = "CREATE TABLE IF NOT EXISTS `{}` ( \
                             ) ENGINE=Memory DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;"
 
 FETCH_INITIAL_VALS_SQL_TPL = "SELECT `ts`, `macd`, `hist` FROM {} \
-                              WHERE ts < {} and MOD(ts, {}) = 0 and p_slow = {} \
+                              WHERE ts < {} and MOD(ts + 60, {}) = 0 and p_slow = {} \
                               ORDER BY ts DESC limit {}"
 
 FETCH_EMA_SQL_TPL = "SELECT f.ts, f.source, f.value, s.value FROM `{}` as `f` \
@@ -44,9 +44,9 @@ FETCH_EMA_SQL_TPL = "SELECT f.ts, f.source, f.value, s.value FROM `{}` as `f` \
 
 
 def generator():
-    for slow in SLOW_LIST:
-        for fast in FAST_LIST:
-            for signal in SIGNAL_LIST:
+    for fast in FAST_LIST:
+        for signal in SIGNAL_LIST:
+            for slow in SLOW_LIST:
                 for period in PERIOD_LIST:
                     if fast + 2 <= slow:
                         yield fast, slow, signal, period
@@ -112,7 +112,7 @@ def processor(fast, slow, signal, period):
             _advise = Advise.HOLD
 
         # Fill period acc
-        if _ts % minute_period == 0:
+        if (_ts + ONE_MINUTE) % minute_period == 0:
             pacc.append((_ts, macd, _hist))
 
         db.execute(
@@ -133,7 +133,7 @@ def processor(fast, slow, signal, period):
     # After all calculations is done COPY data to real table
     # Check if table is fully filled and copy if it is
     if real_count >= estimated_count:
-        db.execute(f'DELETE FROM `{table_name}` WHERE ts = 0', commit=True)
+        db.execute(f'DELETE FROM `{m_table_name}` WHERE ts = 0', commit=True)
         _s = time()
         db.execute(f'INSERT INTO `{table_name}` SELECT * FROM `{m_table_name}`', commit=True)
         print(f'Copy {m_table_name} takes {time() - _s}s')
