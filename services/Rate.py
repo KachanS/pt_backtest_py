@@ -5,7 +5,7 @@ import requests
 
 class Rate:
 
-    CLOSE_RATES_URL = 'http://platotradeinfo.silencatech.com/main/dashboard/ajaxcloserates'
+    CLOSE_RATES_URL = 'http://platotradeinfo.silencatech.com/main/candles/ajaxfetchperiod'
 
     DEFAULT_PAIR = 'btc_usd'
 
@@ -14,8 +14,8 @@ class Rate:
     @staticmethod
     def fetch_close(start_at: int, end_at: int, period: int = 1) -> dict:
         raw = requests.get(Rate.CLOSE_RATES_URL, params={
-            'start': start_at,
-            'end': end_at,
+            'from': start_at,
+            'to': end_at,
             'pair': Rate.DEFAULT_PAIR,
             'period': period
         })
