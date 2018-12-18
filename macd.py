@@ -100,7 +100,7 @@ def processor(fast, slow, signal, period):
                 _st = _ts - _ts % minute_period
                 _st -= (signal - 2) * minute_period
                 pacc = list([(ts, 0.0, 0.0) for ts in range(_st, _ts - len(vals)*minute_period, minute_period)])
-                for _x in vals:
+                for _x in reversed(vals):
                     pacc.append((int(_x[0]), float(_x[1]), float(_x[2])))
             else:
                 pacc = list([(int(i[0]), float(i[1]), float(i[2])) for i in reversed(vals)])
