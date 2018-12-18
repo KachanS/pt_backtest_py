@@ -52,10 +52,10 @@ def combination_filter(fast, slow, signal, period):
 
 
 def generator():
-    for fast in FAST_LIST:
-        for signal in SIGNAL_LIST:
-            for slow in SLOW_LIST:
-                for period in PERIOD_LIST:
+    for period in PERIOD_LIST:
+        for fast in FAST_LIST:
+            for signal in SIGNAL_LIST:
+                for slow in SLOW_LIST:
                     # if fast + 2 <= slow:
                     if combination_filter(fast, slow, signal, period):
                         yield fast, slow, signal, period
