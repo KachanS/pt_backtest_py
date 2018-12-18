@@ -10,7 +10,7 @@ ONE_MINUTE = 60
 FAST_LIST = range(2, 31)
 SLOW_LIST = range(10, 41)
 SIGNAL_LIST = range(2, 21)
-PERIOD_LIST = [30, 60, 120, 240, 1440]
+PERIOD_LIST = [60, 120, 240, 1440]
 
 CREATE_TABLE_SQL_TPL = "CREATE TABLE IF NOT EXISTS `{}` ( \
                                 `ts` int(11) NOT NULL, \
@@ -46,7 +46,7 @@ FETCH_EMA_SQL_TPL = "SELECT f.ts, f.source, f.value, s.value FROM `{}` as `f` \
 def combination_filter(fast, slow, signal, period):
     if fast + 2 > slow:
         return False
-    if (fast + slow + signal) % 4 != 0:
+    if (fast + slow + signal) % 3 != 0:
         return False
     return True
 
@@ -103,7 +103,7 @@ def processor(fast, slow, signal, period):
                 for _x in vals:
                     pacc.append((int(_x[0]), float(_x[1]), float(_x[2])))
             else:
-                pacc = list([(int(i[0]), float(i[1]), float(i[2])) for i in vals])
+                pacc = list([(int(i[0]), float(i[1]), float(i[2])) for i in reversed(vals)])
 
         sma_acc = [_x[1] for _x in pacc[-signal+1:]]
         sma_acc.append(macd)
